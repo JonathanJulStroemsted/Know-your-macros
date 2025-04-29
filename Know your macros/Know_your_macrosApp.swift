@@ -11,7 +11,7 @@ import SwiftUI
 struct Know_your_macrosApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainView()
         }
     }
 }
