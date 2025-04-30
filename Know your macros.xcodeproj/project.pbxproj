@@ -29,9 +29,22 @@
 		B2A700532DC0D983001FBE80 /* Know your macrosUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Know your macrosUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B26BA59F2DC20DAF00A638EB /* Exceptions for "Know your macros" folder in "Know your macros" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"Know-your-macros-Info.plist",
+			);
+			target = B2A7003A2DC0D981001FBE80 /* Know your macros */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		B2A7003D2DC0D981001FBE80 /* Know your macros */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B26BA59F2DC20DAF00A638EB /* Exceptions for "Know your macros" folder in "Know your macros" target */,
+			);
 			path = "Know your macros";
 			sourceTree = "<group>";
 		};
@@ -373,8 +386,12 @@
 				CODE_SIGN_ENTITLEMENTS = "Know your macros/Know_your_macros.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = J47GUYG65B;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Know-your-macros-Info.plist";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app needs access to your step count data to automatically track your daily activity";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "This app needs permission to read your step count from Apple Health.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -410,8 +427,12 @@
 				CODE_SIGN_ENTITLEMENTS = "Know your macros/Know_your_macros.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = J47GUYG65B;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Know-your-macros-Info.plist";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app needs access to your step count data to automatically track your daily activity";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "This app needs permission to read your step count from Apple Health.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

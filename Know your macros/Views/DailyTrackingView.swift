@@ -3,6 +3,7 @@ import SwiftUI
 struct DailyTrackingView: View {
     @ObservedObject var profileManager: ProfileManager
     @ObservedObject var dailyTracker: DailyTracker
+    @StateObject private var healthKitManager = HealthKitManager()
     
     let profile: Profile
     let date: Date
@@ -11,6 +12,12 @@ struct DailyTrackingView: View {
     @State private var caloriesConsumedString: String = "0"
     @State private var stepsTakenString: String = "0"
     @State private var caloriesBurnedGymString: String = "0"
+    @State private var showingHealthKitPrompt = false
+    @State private var showingHealthKitNotAvailable = false
+    @State private var showingPermissionsError = false
+    @State private var showingErrorMessage = false
+    @State private var showingHistoricalImportSuccess = false
+    @State private var isLoadingSteps = false
     
     init(profile: Profile, profileManager: ProfileManager, dailyTracker: DailyTracker, date: Date = Date()) {
         self.profile = profile
@@ -107,6 +114,13 @@ struct DailyTrackingView: View {
                 HStack {
                     Text("Steps Taken:")
                     Spacer()
+                    
+                    if isLoadingSteps {
+                        ProgressView()
+                            .frame(width: 20, height: 20)
+                            .padding(.trailing, 8)
+                    }
+                    
                     TextField("0", text: $stepsTakenString)
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.trailing)
@@ -117,6 +131,59 @@ struct DailyTrackingView: View {
                                 saveEntry()
                             }
                         }
+                }
+                
+                // Show Apple Health Buttons
+                if healthKitManager.isHealthDataAvailable && !healthKitManager.permissionsError {
+                    if healthKitManager.isImportingBulkData {
+                        VStack {
+                            ProgressView(value: healthKitManager.bulkImportProgress, total: 1.0) {
+                                Text("Importing Historical Step Data...")
+                                    .font(.caption)
+                            }
+                            Text("\(Int(healthKitManager.bulkImportProgress * 100))%")
+                                .font(.caption2)
+                        }
+                        .padding(.vertical, 8)
+                    } else {
+                        Button(action: {
+                            loadStepsFromHealthKit()
+                        }) {
+                            HStack {
+                                Image(systemName: "heart.fill")
+                                    .foregroundColor(.pink)
+                                Text(healthKitManager.isAuthorized ? "Sync Today's Steps" : "Connect Apple Health")
+                                Spacer()
+                            }
+                        }
+                        .disabled(isLoadingSteps)
+                        
+                        Button(action: {
+                            importHistoricalStepData()
+                        }) {
+                            HStack {
+                                Image(systemName: "calendar.badge.clock")
+                                    .foregroundColor(.blue)
+                                Text("Import 2 Months of Step Data")
+                                Spacer()
+                            }
+                        }
+                        .disabled(isLoadingSteps || !healthKitManager.isAuthorized)
+                    }
+                }
+                
+                // Show this debug info only if we encountered an error
+                if !healthKitManager.lastErrorMessage.isEmpty {
+                    Button(action: {
+                        showingErrorMessage = true
+                    }) {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundColor(.orange)
+                            Text("Show Health Error Details")
+                            Spacer()
+                        }
+                    }
                 }
                 
                 HStack {
@@ -188,6 +255,44 @@ struct DailyTrackingView: View {
             caloriesConsumedString = "\(freshEntry.caloriesConsumed)"
             stepsTakenString = "\(freshEntry.stepsTaken)"
             caloriesBurnedGymString = "\(freshEntry.caloriesBurnedGym)"
+            
+            // Auto-sync steps for today if authorized and no permissions errors
+            if isToday && healthKitManager.isAuthorized && !healthKitManager.permissionsError {
+                loadStepsFromHealthKit()
+            }
+        }
+        .alert("Connect to Apple Health", isPresented: $showingHealthKitPrompt) {
+            Button("Cancel", role: .cancel) { }
+            Button("Connect") {
+                requestHealthKitAuthorization()
+            }
+        } message: {
+            Text("Allow this app to access your step count data from Apple Health?")
+        }
+        .alert("Health Data Not Available", isPresented: $showingHealthKitNotAvailable) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("HealthKit is not available on this device. This is normal in the simulator - on a real device, make sure Health app is installed and accessible.")
+        }
+        .alert("Health Permissions Required", isPresented: $showingPermissionsError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("This app needs permission descriptions in Info.plist to access HealthKit data. When testing in a simulator, you can manually enter steps instead.")
+        }
+        .alert("HealthKit Error Details", isPresented: $showingErrorMessage) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(healthKitManager.lastErrorMessage)
+        }
+        .alert("Historical Data Import Complete", isPresented: $showingHistoricalImportSuccess) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Successfully imported step data for the current and previous month.")
+        }
+        .onChange(of: healthKitManager.permissionsError) { _, newValue in
+            if newValue {
+                showingPermissionsError = true
+            }
         }
     }
     
@@ -198,6 +303,108 @@ struct DailyTrackingView: View {
         
         // Save the entry and update the UI
         dailyTracker.addEntry(updatedEntry)
+    }
+    
+    private func loadStepsFromHealthKit() {
+        print("DailyTrackingView: Attempting to load steps from HealthKit")
+        // First check if HealthKit is available on this device
+        if !healthKitManager.isAvailable {
+            print("DailyTrackingView: HealthKit not available")
+            showingHealthKitNotAvailable = true
+            return
+        }
+        
+        // Then check if we're authorized
+        if !healthKitManager.isAuthorized {
+            print("DailyTrackingView: Not authorized for HealthKit, showing prompt")
+            showingHealthKitPrompt = true
+            return
+        }
+        
+        isLoadingSteps = true
+        
+        healthKitManager.getStepsForDate(date) { steps, error in
+            isLoadingSteps = false
+            
+            if let error = error {
+                print("DailyTrackingView: Error fetching steps: \(error.localizedDescription)")
+                showingErrorMessage = true
+                return
+            }
+            
+            entry.stepsTaken = steps
+            stepsTakenString = "\(steps)"
+            saveEntry()
+            print("DailyTrackingView: Successfully updated steps to \(steps)")
+        }
+    }
+    
+    private func importHistoricalStepData() {
+        print("DailyTrackingView: Attempting to import historical step data")
+        // First check if HealthKit is available on this device
+        if !healthKitManager.isAvailable {
+            print("DailyTrackingView: HealthKit not available for historical import")
+            showingHealthKitNotAvailable = true
+            return
+        }
+        
+        // Then check if we're authorized
+        if !healthKitManager.isAuthorized {
+            print("DailyTrackingView: Not authorized for HealthKit historical import, showing prompt")
+            showingHealthKitPrompt = true
+            return
+        }
+        
+        healthKitManager.importHistoricalStepData { stepsByDate, error in
+            if let error = error {
+                print("DailyTrackingView: Error importing historical step data: \(error.localizedDescription)")
+                showingErrorMessage = true
+                return
+            }
+            
+            print("DailyTrackingView: Successfully imported \(stepsByDate.count) days of step data")
+            
+            // Create entries for each day with the imported step data
+            for (date, steps) in stepsByDate {
+                // Get the existing entry for this date, if any
+                var dailyEntry = dailyTracker.getEntryFor(profileId: profile.id, date: date)
+                
+                // Only update if we have meaningful step data (greater than 0)
+                if steps > 0 {
+                    dailyEntry.stepsTaken = steps
+                    dailyTracker.addEntry(dailyEntry)
+                }
+            }
+            
+            // If we're viewing today's data, update the current entry
+            if isToday, let todaySteps = stepsByDate.first(where: { Calendar.current.isDate($0.0, inSameDayAs: date) })?.1 {
+                if todaySteps > 0 {
+                    entry.stepsTaken = todaySteps
+                    stepsTakenString = "\(todaySteps)"
+                    saveEntry()
+                }
+            }
+            
+            // Show success alert
+            showingHistoricalImportSuccess = true
+        }
+    }
+    
+    private func requestHealthKitAuthorization() {
+        print("DailyTrackingView: Requesting HealthKit authorization")
+        healthKitManager.requestAuthorization { success, error in
+            if success {
+                print("DailyTrackingView: HealthKit authorization successful")
+                loadStepsFromHealthKit()
+            } else if let error = error {
+                print("DailyTrackingView: HealthKit authorization failed: \(error.localizedDescription)")
+                if healthKitManager.permissionsError {
+                    showingPermissionsError = true
+                } else {
+                    showingErrorMessage = true
+                }
+            }
+        }
     }
 }
 

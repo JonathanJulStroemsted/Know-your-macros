@@ -179,51 +179,82 @@ struct CalendarSummaryView: View {
     let profile: Profile
     let month: Date
     @State private var showingCalorieExplanation = false
+    @State private var showingStepExplanation = false
     
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             Text("Month Summary")
                 .font(.headline)
             
-            VStack(spacing: 16) {
-                // Calories consumed section
-                VStack {
-                    HStack {
-                        Text("\(totalCaloriesConsumed)/\(totalCalorieAllowance) !")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(totalCaloriesConsumed > totalCalorieAllowance ? .red : .green)
-                        
-                        Button(action: {
-                            showingCalorieExplanation = true
-                        }) {
-                            Image(systemName: "info.circle")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                    .alert("Calorie Calculation", isPresented: $showingCalorieExplanation) {
-                        Button("Got it", role: .cancel) { }
-                    } message: {
-                        Text("Your total calorie allowance includes calories burned from exercise. It is calculated as: Base Goal (\(trackedDaysCalorieGoal)) + Burned (\(totalCaloriesBurned)) = \(totalCalorieAllowance)")
-                    }
-                    
-                    Text("Calories Consumed")
-                        .font(.caption)
-                }
-                .frame(maxWidth: .infinity)
-                
-                // Days tracked and calories burned section
-                HStack(spacing: 40) {
+            VStack(spacing: 20) {
+                // Calories consumed section and step counter in one row
+                HStack {
+                    // Calories counter
                     VStack {
-                        Text("\(entriesInMonth.count)")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.blue)
-                        Text("Days Tracked")
+                        HStack {
+                            Text("\(totalCaloriesConsumed)/\(totalCalorieAllowance)")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(totalCaloriesConsumed > totalCalorieAllowance ? .red : .green)
+                            
+                            Button(action: {
+                                showingCalorieExplanation = true
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .font(.caption)
+                                    .foregroundColor(.blue)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                        
+                        Text("Calories")
                             .font(.caption)
                     }
+                    
+                    Spacer()
+                    
+                    // Step counter with average for the month
+                    VStack {
+                        HStack {
+                            Image(systemName: "figure.walk")
+                                .foregroundColor(.blue)
+                            
+                            let averageSteps = calculateAverageSteps()
+                            Text("\(averageSteps)")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(averageSteps >= 7500 ? .green : (averageSteps >= 5000 ? .orange : .red))
+                            
+                            Button(action: {
+                                showingStepExplanation = true
+                            }) {
+                                Image(systemName: "info.circle")
+                                    .font(.caption)
+                                    .foregroundColor(.blue)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                        
+                        Text("Avg Steps")
+                            .font(.caption)
+                    }
+                }
+                .padding(.horizontal, 20) // control the space between the two rows for calories consumed and steps
+                .padding(.vertical, 10)
+                .alert("Step Goals", isPresented: $showingStepExplanation) {
+                    Button("Got it", role: .cancel) { }
+                } message: {
+                    Text("Daily step targets: 7,500+ is excellent, 5,000-7,499 is good, below 5,000 needs improvement. The average is calculated only from days with recorded data.")
+                }
+                .alert("Calorie Calculation", isPresented: $showingCalorieExplanation) {
+                    Button("Got it", role: .cancel) { }
+                } message: {
+                    Text("Your total calorie allowance includes calories burned from exercise. It is calculated as: Base Goal (\(trackedDaysCalorieGoal)) + Burned (\(totalCaloriesBurned)) = \(totalCalorieAllowance)")
+                }
+                
+                // Days tracked and calories burned section
+                HStack {
+                    
                     
                     VStack {
                         Text("\(totalCaloriesBurned)")
@@ -233,12 +264,23 @@ struct CalendarSummaryView: View {
                         Text("Calories Burned")
                             .font(.caption)
                     }
+                    Spacer()
+                    VStack {
+                        Text("\(entriesInMonth.count)")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.blue)
+                        Text("Days Tracked")
+                            .font(.caption)
+                    }
                 }
+                                .padding(.horizontal, 10) // control the space between the two rows for calories burned and days tracked
+
             }
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 8)
                 .fill(Color(.secondarySystemBackground))
         )
     }
@@ -282,6 +324,30 @@ struct CalendarSummaryView: View {
     var totalCalorieAllowance: Int {
         // Base goal + burned calories
         return trackedDaysCalorieGoal + totalCaloriesBurned
+    }
+    
+    private func calculateAverageSteps() -> Int {
+        let calendar = Calendar.current
+        let range = calendar.range(of: .day, in: .month, for: month)!
+        
+        var totalSteps = 0
+        var daysWithStepData = 0
+        
+        for day in range {
+            let date = calendar.date(bySetting: .day, value: day, of: month)!
+            
+            // Get all entries for this profile and date
+            let entriesForDay = dailyTracker.getEntryFor(profileId: profile.id, date: date)
+            
+            // Only count days where we have step data
+            if entriesForDay.stepsTaken > 0 {
+                totalSteps += entriesForDay.stepsTaken
+                daysWithStepData += 1
+            }
+        }
+        
+        // Return the average, or 0 if no days with data
+        return daysWithStepData > 0 ? totalSteps / daysWithStepData : 0
     }
 }
 
