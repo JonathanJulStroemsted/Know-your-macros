@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MainView: View {
     @StateObject private var profileManager = ProfileManager()
+    @StateObject private var dailyTracker = DailyTracker()
     @State private var showingAddProfile = false
     
     var body: some View {
@@ -24,7 +25,7 @@ struct MainView: View {
                 } else {
                     List {
                         ForEach(profileManager.profiles) { profile in
-                            NavigationLink(destination: CalorieCalculatorView(profile: profile, profileManager: profileManager)) {
+                            NavigationLink(destination: CalorieCalculatorView(profile: profile, profileManager: profileManager, dailyTracker: dailyTracker)) {
                                 HStack {
                                     Image(systemName: "person.circle")
                                         .font(.title2)

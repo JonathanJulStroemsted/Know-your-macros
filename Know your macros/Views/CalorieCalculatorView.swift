@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CalorieCalculatorView: View {
     @ObservedObject var profileManager: ProfileManager
+    @ObservedObject var dailyTracker: DailyTracker
     
     @State private var profile: Profile
     @State private var showingActivityLevelPicker = false
@@ -9,8 +10,9 @@ struct CalorieCalculatorView: View {
     @State private var showTDEEInfo = false
     @State private var showingEditProfile = false
     
-    init(profile: Profile, profileManager: ProfileManager) {
+    init(profile: Profile, profileManager: ProfileManager, dailyTracker: DailyTracker) {
         self.profileManager = profileManager
+        self.dailyTracker = dailyTracker
         self._profile = State(initialValue: profile)
     }
     
@@ -47,6 +49,30 @@ struct CalorieCalculatorView: View {
                     Spacer()
                     Text(goal.displayName)
                         .foregroundColor(.blue)
+                }
+            }
+            
+            Section {
+                NavigationLink(destination: DailyTrackingView(profile: profile, profileManager: profileManager, dailyTracker: dailyTracker)) {
+                    HStack {
+                        Image(systemName: "fork.knife.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.green)
+                        Text("Track Today's Calories")
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                }
+                
+                NavigationLink(destination: CalendarView(profileManager: profileManager, dailyTracker: dailyTracker, profile: profile)) {
+                    HStack {
+                        Image(systemName: "calendar")
+                            .font(.title2)
+                            .foregroundColor(.blue)
+                        Text("View History & Past Entries")
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
                 }
             }
             
@@ -166,6 +192,7 @@ struct CalorieCalculatorView: View {
             activityLevelIndex: 2,
             goalIndex: 0
         ),
-        profileManager: ProfileManager()
+        profileManager: ProfileManager(),
+        dailyTracker: DailyTracker()
     )
 } 
