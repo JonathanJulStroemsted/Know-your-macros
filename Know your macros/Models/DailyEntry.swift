@@ -6,14 +6,20 @@ struct DailyEntry: Identifiable, Codable {
     var caloriesConsumed: Int
     var stepsTaken: Int
     var caloriesBurnedGym: Int
+    var caloriesBurnedExercise: Int
     var profileId: UUID
+    var exercises: [UserExercise]?
+    var caloriesAvailableAdjustment: Int?
     
-    init(profileId: UUID, date: Date = Date(), caloriesConsumed: Int = 0, stepsTaken: Int = 0, caloriesBurnedGym: Int = 0) {
+    init(profileId: UUID, date: Date = Date(), caloriesConsumed: Int = 0, stepsTaken: Int = 0, caloriesBurnedGym: Int = 0, caloriesBurnedExercise: Int = 0, exercises: [UserExercise]? = nil, caloriesAvailableAdjustment: Int? = nil) {
         self.profileId = profileId
         self.date = date
         self.caloriesConsumed = caloriesConsumed
         self.stepsTaken = stepsTaken
         self.caloriesBurnedGym = caloriesBurnedGym
+        self.caloriesBurnedExercise = caloriesBurnedExercise
+        self.exercises = exercises
+        self.caloriesAvailableAdjustment = caloriesAvailableAdjustment
     }
     
     var caloriesFromSteps: Int {
@@ -22,7 +28,7 @@ struct DailyEntry: Identifiable, Codable {
     }
     
     var totalCaloriesBurned: Int {
-        return caloriesFromSteps + caloriesBurnedGym
+        return caloriesFromSteps + caloriesBurnedGym + caloriesBurnedExercise
     }
 }
 
@@ -88,6 +94,9 @@ class DailyTracker: ObservableObject {
         if let encoded = try? JSONEncoder().encode(entries) {
             UserDefaults.standard.set(encoded, forKey: saveKey)
             objectWillChange.send()
+            print("Successfully saved \(entries.count) daily entries")
+        } else {
+            print("Failed to encode daily entries")
         }
     }
     
@@ -95,10 +104,39 @@ class DailyTracker: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: saveKey) {
             if let decoded = try? JSONDecoder().decode([DailyEntry].self, from: data) {
                 entries = decoded
+                print("Successfully loaded \(entries.count) daily entries")
                 return
+            } else {
+                print("Failed to decode daily entries")
             }
         }
         
         entries = []
+    }
+    
+    // Function to update an entry directly using the entry itself
+    func updateEntry(_ entry: DailyEntry) {
+        if let index = entries.firstIndex(where: { 
+            calendar.isDate($0.date, inSameDayAs: entry.date) && 
+            $0.profileId == entry.profileId 
+        }) {
+            entries[index] = entry
+            saveEntries()
+        } else {
+            // If no matching entry exists, add it
+            entries.append(entry)
+            saveEntries()
+        }
+    }
+    
+    // Function to update an entry in the tracker
+    func updateEntry(profileId: UUID, date: Date, entry: DailyEntry) {
+        if let index = entries.firstIndex(where: { 
+            calendar.isDate($0.date, inSameDayAs: date) && 
+            $0.profileId == profileId 
+        }) {
+            entries[index] = entry
+            saveEntries()
+        }
     }
 } 

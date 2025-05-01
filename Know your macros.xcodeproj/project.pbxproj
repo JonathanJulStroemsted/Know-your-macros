@@ -29,22 +29,9 @@
 		B2A700532DC0D983001FBE80 /* Know your macrosUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Know your macrosUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		B26BA59F2DC20DAF00A638EB /* Exceptions for "Know your macros" folder in "Know your macros" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				"Know-your-macros-Info.plist",
-			);
-			target = B2A7003A2DC0D981001FBE80 /* Know your macros */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		B2A7003D2DC0D981001FBE80 /* Know your macros */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				B26BA59F2DC20DAF00A638EB /* Exceptions for "Know your macros" folder in "Know your macros" target */,
-			);
 			path = "Know your macros";
 			sourceTree = "<group>";
 		};

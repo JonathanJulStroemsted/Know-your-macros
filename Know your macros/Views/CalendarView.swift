@@ -281,7 +281,7 @@ struct CalendarSummaryView: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color(.secondarySystemBackground))
+                .fill(Color.secondary.opacity(0.2))
         )
     }
     

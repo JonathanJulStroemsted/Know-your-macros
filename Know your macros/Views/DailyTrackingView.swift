@@ -18,6 +18,10 @@ struct DailyTrackingView: View {
     @State private var showingErrorMessage = false
     @State private var showingHistoricalImportSuccess = false
     @State private var isLoadingSteps = false
+    @State private var showingExerciseSelection = false
+    @State private var showingWorkoutDetail = false
+    @State private var selectedExercise: UserExercise?
+    @State private var showingSaveConfirmation = false
     
     init(profile: Profile, profileManager: ProfileManager, dailyTracker: DailyTracker, date: Date = Date()) {
         self.profile = profile
@@ -58,7 +62,8 @@ struct DailyTrackingView: View {
     }
     
     var caloriesRemaining: Int {
-        dailyCalories - entry.caloriesConsumed + entry.totalCaloriesBurned
+        let adjustment = entry.caloriesAvailableAdjustment ?? 0
+        return dailyCalories - entry.caloriesConsumed + entry.totalCaloriesBurned + adjustment
     }
     
     var isToday: Bool {
@@ -200,6 +205,17 @@ struct DailyTrackingView: View {
                             }
                         }
                 }
+                
+                Button(action: {
+                    showingExerciseSelection = true
+                }) {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(.mint)
+                        Text("Add or Edit Exercises")
+                        Spacer()
+                    }
+                }
             }
             
             Section(header: Text("Calories from Activity")) {
@@ -218,11 +234,106 @@ struct DailyTrackingView: View {
                 }
                 
                 HStack {
+                    Text("From Exercises:")
+                    Spacer()
+                    Text("\(entry.caloriesBurnedExercise)")
+                        .foregroundColor(.green)
+                }
+                
+                HStack {
                     Text("Total Calories Burned:")
                     Spacer()
                     Text("\(entry.totalCaloriesBurned)")
                         .foregroundColor(.green)
                         .fontWeight(.bold)
+                }
+            }
+            
+            Section(header: Text("Logged Exercises")) {
+                if let exercises = entry.exercises, !exercises.isEmpty {
+                    ForEach(exercises) { exercise in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(exercise.exercise.name)
+                                    .font(.headline)
+                                
+                                HStack {
+                                    if let workoutSets = exercise.workoutSets, !workoutSets.isEmpty {
+                                        Text("\(workoutSets.count) sets")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    } else {
+                                        Text("\(exercise.sets) sets • \(exercise.reps) reps")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    
+                                    if exercise.weight > 0 {
+                                        Text("• \(Int(exercise.weight)) kg")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            // Show detailed info button if the exercise has workout sets
+                            if let workoutSets = exercise.workoutSets, !workoutSets.isEmpty {
+                                Button(action: {
+                                    selectedExercise = exercise
+                                    showingWorkoutDetail = true
+                                }) {
+                                    Image(systemName: "info.circle")
+                                        .foregroundColor(.mint)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Text("No exercises logged for this day")
+                        .foregroundColor(.gray)
+                        .italic()
+                }
+                
+                Button(action: {
+                    showingExerciseSelection = true
+                }) {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(.mint)
+                        Text("Add or Edit Exercises")
+                        Spacer()
+                    }
+                }
+                
+                // Add explicit save button for exercises
+                if let exercises = entry.exercises, !exercises.isEmpty {
+                    Button(action: {
+                        // Explicitly save the exercises to ensure they're properly stored
+                        var updatedEntry = entry
+                        updatedEntry.exercises = exercises
+                        
+                        // Calculate calories burned (more accurate with MET values)
+                        let burnedCalories = calculateCaloriesBurned(from: exercises)
+                        updatedEntry.caloriesBurnedExercise = burnedCalories
+                        
+                        // Adjust available calories based on exercise
+                        updatedEntry.caloriesAvailableAdjustment = burnedCalories
+                        
+                        // Save the updated entry
+                        dailyTracker.updateEntry(profileId: profile.id, date: date, entry: updatedEntry)
+                        
+                        // Show confirmation
+                        showingSaveConfirmation = true
+                        
+                        // Update the view with the new data
+                        entry = updatedEntry
+                        
+                    }) {
+                        Label("Save Workout Data", systemImage: "arrow.down.doc.fill")
+                            .foregroundColor(.mint)
+                    }
                 }
             }
             
@@ -244,6 +355,12 @@ struct DailyTrackingView: View {
                     Text("Goal (\(dailyCalories)) - Consumed (\(entry.caloriesConsumed)) + Burned (\(entry.totalCaloriesBurned))")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                    
+                    if let adjustment = entry.caloriesAvailableAdjustment, adjustment > 0 {
+                        Text("+ Exercise Adjustment (\(adjustment) extra calories available)")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    }
                 }
             }
         }
@@ -255,6 +372,13 @@ struct DailyTrackingView: View {
             caloriesConsumedString = "\(freshEntry.caloriesConsumed)"
             stepsTakenString = "\(freshEntry.stepsTaken)"
             caloriesBurnedGymString = "\(freshEntry.caloriesBurnedGym)"
+            
+            // Verify if we have exercise data
+            if let exercises = freshEntry.exercises, !exercises.isEmpty {
+                print("Found \(exercises.count) exercises for \(dateFormatter.string(from: date))")
+            } else {
+                print("No exercises found for \(dateFormatter.string(from: date))")
+            }
             
             // Auto-sync steps for today if authorized and no permissions errors
             if isToday && healthKitManager.isAuthorized && !healthKitManager.permissionsError {
@@ -289,9 +413,32 @@ struct DailyTrackingView: View {
         } message: {
             Text("Successfully imported step data for the current and previous month.")
         }
+        .alert("Workout Data Saved", isPresented: $showingSaveConfirmation) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Your workout data has been saved and calories updated.")
+        }
+        .sheet(isPresented: $showingExerciseSelection) {
+            makeExerciseSelectionView()
+        }
+        .sheet(isPresented: $showingWorkoutDetail) {
+            if let exercise = selectedExercise {
+                WorkoutDetailView(exercise: exercise)
+            }
+        }
         .onChange(of: healthKitManager.permissionsError) { _, newValue in
             if newValue {
                 showingPermissionsError = true
+            }
+        }
+        .onChange(of: showingWorkoutDetail) { _, isShowing in
+            if !isShowing {
+                // Refresh the entry when returning from workout detail view
+                let updatedEntry = dailyTracker.getEntryFor(profileId: profile.id, date: date)
+                entry = updatedEntry
+                // Update the UI
+                caloriesConsumedString = "\(updatedEntry.caloriesConsumed)"
+                caloriesBurnedGymString = "\(updatedEntry.caloriesBurnedGym)" 
             }
         }
     }
@@ -406,20 +553,241 @@ struct DailyTrackingView: View {
             }
         }
     }
+    
+    private func makeExerciseSelectionView() -> some View {
+        let viewModel = ExerciseViewModel()
+        
+        // Explicitly load the entry to get the most up-to-date data
+        let freshEntry = dailyTracker.getEntryFor(profileId: profile.id, date: date)
+        
+        // Pre-populate the viewModel with saved exercises if they exist
+        if let savedExercises = freshEntry.exercises, !savedExercises.isEmpty {
+            print("Pre-populating ExerciseSelectionView with \(savedExercises.count) saved exercises")
+            viewModel.selectedExercises = savedExercises
+        } else {
+            print("No saved exercises to pre-populate")
+        }
+        
+        // Create the view and pass environment objects
+        return ExerciseSelectionView(viewModel: viewModel, dailyTracker: dailyTracker, profile: profile, date: date)
+            .environmentObject(profileManager)
+            .onDisappear {
+                // Refresh the entry when returning from exercise selection
+                let updatedEntry = dailyTracker.getEntryFor(profileId: profile.id, date: date)
+                entry = updatedEntry
+                // Update the calories in the UI
+                caloriesConsumedString = "\(updatedEntry.caloriesConsumed)"
+                caloriesBurnedGymString = "\(updatedEntry.caloriesBurnedGym)" 
+            }
+    }
+    
+    private func calculateCaloriesBurned(from exercises: [UserExercise]) -> Int {
+        var totalCalories = 0
+        
+        for userExercise in exercises {
+            let exercise = userExercise.exercise
+            let metValue = exercise.met
+            
+            // If we have detailed workout sets, use them for calculation
+            if let workoutSets = userExercise.workoutSets, !workoutSets.isEmpty {
+                for set in workoutSets {
+                    // Each set duration in minutes (estimate based on reps and tempo)
+                    var setDuration = Double(set.reps) * 0.05 // Base: 3 seconds per rep
+                    
+                    // Adjust for tempo
+                    switch set.tempo {
+                    case .slow:
+                        setDuration *= 1.5
+                    case .normal:
+                        setDuration *= 1.0
+                    case .fast:
+                        setDuration *= 0.8
+                    case .stopAndGo:
+                        setDuration *= 1.3
+                    }
+                    
+                    // Convert to hours for MET formula
+                    let durationInHours = setDuration / 60.0
+                    
+                    // Use profile weight for calculation
+                    let weight = Double(profile.weight)
+                    
+                    // MET formula: Calories = MET × weight(kg) × duration(hrs)
+                    let setCalories = metValue * weight * durationInHours
+                    totalCalories += Int(setCalories)
+                }
+            } else {
+                // For exercises without detailed data, use the traditional estimate
+                // Estimate: 1 set takes about 1 minute
+                let durationInHours = Double(userExercise.sets) / 60.0
+                let weight = Double(profile.weight)
+                let calories = metValue * weight * durationInHours
+                totalCalories += Int(calories)
+            }
+        }
+        
+        return totalCalories
+    }
+}
+
+struct WorkoutDetailView: View {
+    let exercise: UserExercise
+    @Environment(\.presentationMode) var presentationMode
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Exercise header
+                    Text(exercise.exercise.name)
+                        .font(.largeTitle)
+                        .bold()
+                        .padding(.bottom, 4)
+                    
+                    if let description = exercise.exercise.description, !description.isEmpty {
+                        Text(description)
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .padding(.bottom, 8)
+                    }
+                    
+                    // MET value
+                    Text("MET Value: \(exercise.exercise.met, specifier: "%.1f")")
+                        .font(.subheadline)
+                        .foregroundColor(.blue)
+                        .padding(.bottom, 16)
+                    
+                    // Sets detail
+                    if let workoutSets = exercise.workoutSets, !workoutSets.isEmpty {
+                        Text("Sets")
+                            .font(.headline)
+                            .padding(.bottom, 2)
+                        
+                        ForEach(Array(workoutSets.enumerated()), id: \.element.id) { index, set in
+                            VStack(alignment: .leading) {
+                                Text("Set \(index + 1)")
+                                    .font(.subheadline)
+                                    .fontWeight(.bold)
+                                
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text("Weight")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Text("\(set.weight, specifier: "%.1f") kg")
+                                            .font(.body)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    VStack(alignment: .leading) {
+                                        Text("Reps")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Text("\(set.reps)")
+                                            .font(.body)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    VStack(alignment: .leading) {
+                                        Text("Tempo")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Text(set.tempo.rawValue)
+                                            .font(.body)
+                                    }
+                                }
+                                
+                                if index < workoutSets.count - 1 {
+                                    HStack {
+                                        Text("Rest: \(set.restTimeSeconds) seconds")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Spacer()
+                                    }
+                                }
+                            }
+                            .padding()
+                            .background(Color(.systemGray6))
+                            .cornerRadius(8)
+                        }
+                    } else {
+                        // Basic exercise info without detailed sets
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text("Sets:")
+                                    .font(.headline)
+                                Text("\(exercise.sets)")
+                            }
+                            
+                            HStack {
+                                Text("Reps:")
+                                    .font(.headline)
+                                Text("\(exercise.reps)")
+                            }
+                            
+                            if exercise.weight > 0 {
+                                HStack {
+                                    Text("Weight:")
+                                        .font(.headline)
+                                    Text("\(exercise.weight, specifier: "%.1f") kg")
+                                }
+                            }
+                        }
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
+                    }
+                    
+                    // Notes
+                    if let notes = exercise.notes, !notes.isEmpty {
+                        Text("Notes")
+                            .font(.headline)
+                            .padding(.top, 8)
+                        
+                        Text(notes)
+                            .padding()
+                            .background(Color(.systemGray6))
+                            .cornerRadius(8)
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle("Workout Details")
+            .navigationBarItems(trailing: Button("Close") {
+                presentationMode.wrappedValue.dismiss()
+            })
+        }
+    }
 }
 
 #Preview {
-    DailyTrackingView(
-        profile: Profile(
-            name: "John Doe",
-            weight: 75,
-            height: 180,
-            age: 30,
-            isMale: true,
-            activityLevelIndex: 2,
-            goalIndex: 0
-        ),
-        profileManager: ProfileManager(),
-        dailyTracker: DailyTracker()
+    let profile = Profile(
+        name: "John Doe",
+        weight: 75,
+        height: 180,
+        age: 30,
+        isMale: true,
+        activityLevelIndex: 2,
+        goalIndex: 0
+    )
+    
+    let profileManager = ProfileManager()
+    let dailyTracker = DailyTracker()
+    
+    // Create a sample entry to make preview work
+    var entry = DailyEntry(profileId: profile.id)
+    entry.caloriesConsumed = 1500
+    entry.stepsTaken = 8000
+    entry.caloriesBurnedGym = 200
+    
+    // Add it to the tracker so it's available in the preview
+    dailyTracker.addEntry(entry)
+    
+    return DailyTrackingView(
+        profile: profile,
+        profileManager: profileManager,
+        dailyTracker: dailyTracker
     )
 } 
