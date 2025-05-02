@@ -206,14 +206,46 @@ struct DailyTrackingView: View {
                         }
                 }
                 
-                Button(action: {
-                    showingExerciseSelection = true
-                }) {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundColor(.mint)
-                        Text("Add or Edit Exercises")
-                        Spacer()
+                Section(header: Text("Exercise")) {
+                    NavigationLink {
+                        makeExerciseSelectionView()
+                            .environmentObject(dailyTracker)
+                    } label: {
+                        HStack {
+                            Image(systemName: "figure.run")
+                                .font(.title2)
+                                .foregroundColor(.blue)
+                            Text("Add Exercise")
+                            Spacer()
+                        }
+                    }
+                    
+                    if let exercises = entry.exercises, !exercises.isEmpty {
+                        ForEach(exercises) { exercise in
+                            NavigationLink {
+                                WorkoutDetailView(exercise: exercise)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "figure.run")
+                                        .font(.title2)
+                                        .foregroundColor(.blue)
+                                    VStack(alignment: .leading) {
+                                        Text(exercise.exercise.name)
+                                            .font(.headline)
+                                        if let sets = exercise.workoutSets, !sets.isEmpty {
+                                            Text("\(sets.count) sets")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        } else {
+                                            Text("\(exercise.sets) sets")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                 
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -296,9 +328,10 @@ struct DailyTrackingView: View {
                         .italic()
                 }
                 
-                Button(action: {
-                    showingExerciseSelection = true
-                }) {
+                NavigationLink {
+                    makeExerciseSelectionView()
+                        .environmentObject(dailyTracker)
+                } label: {
                     HStack {
                         Image(systemName: "plus.circle.fill")
                             .foregroundColor(.mint)
@@ -417,14 +450,6 @@ struct DailyTrackingView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text("Your workout data has been saved and calories updated.")
-        }
-        .sheet(isPresented: $showingExerciseSelection) {
-            makeExerciseSelectionView()
-        }
-        .sheet(isPresented: $showingWorkoutDetail) {
-            if let exercise = selectedExercise {
-                WorkoutDetailView(exercise: exercise)
-            }
         }
         .onChange(of: healthKitManager.permissionsError) { _, newValue in
             if newValue {
@@ -632,106 +657,78 @@ struct DailyTrackingView: View {
 
 struct WorkoutDetailView: View {
     let exercise: UserExercise
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    // Exercise header
-                    Text(exercise.exercise.name)
-                        .font(.largeTitle)
-                        .bold()
-                        .padding(.bottom, 4)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                // Exercise header
+                Text(exercise.exercise.name)
+                    .font(.largeTitle)
+                    .bold()
+                    .padding(.bottom, 4)
+                
+                if let description = exercise.exercise.description, !description.isEmpty {
+                    Text(description)
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .padding(.bottom, 8)
+                }
+                
+                // MET value
+                Text("MET Value: \(exercise.exercise.met, specifier: "%.1f")")
+                    .font(.subheadline)
+                    .foregroundColor(.blue)
+                    .padding(.bottom, 16)
+                
+                // Sets detail
+                if let workoutSets = exercise.workoutSets, !workoutSets.isEmpty {
+                    Text("Sets")
+                        .font(.headline)
+                        .padding(.bottom, 2)
                     
-                    if let description = exercise.exercise.description, !description.isEmpty {
-                        Text(description)
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                            .padding(.bottom, 8)
-                    }
-                    
-                    // MET value
-                    Text("MET Value: \(exercise.exercise.met, specifier: "%.1f")")
-                        .font(.subheadline)
-                        .foregroundColor(.blue)
-                        .padding(.bottom, 16)
-                    
-                    // Sets detail
-                    if let workoutSets = exercise.workoutSets, !workoutSets.isEmpty {
-                        Text("Sets")
-                            .font(.headline)
-                            .padding(.bottom, 2)
-                        
-                        ForEach(Array(workoutSets.enumerated()), id: \.element.id) { index, set in
-                            VStack(alignment: .leading) {
-                                Text("Set \(index + 1)")
-                                    .font(.subheadline)
-                                    .fontWeight(.bold)
-                                
-                                HStack {
-                                    VStack(alignment: .leading) {
-                                        Text("Weight")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                        Text("\(set.weight, specifier: "%.1f") kg")
-                                            .font(.body)
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    VStack(alignment: .leading) {
-                                        Text("Reps")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                        Text("\(set.reps)")
-                                            .font(.body)
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    VStack(alignment: .leading) {
-                                        Text("Tempo")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                        Text(set.tempo.rawValue)
-                                            .font(.body)
-                                    }
-                                }
-                                
-                                if index < workoutSets.count - 1 {
-                                    HStack {
-                                        Text("Rest: \(set.restTimeSeconds) seconds")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                        Spacer()
-                                    }
-                                }
-                            }
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .cornerRadius(8)
-                        }
-                    } else {
-                        // Basic exercise info without detailed sets
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text("Sets:")
-                                    .font(.headline)
-                                Text("\(exercise.sets)")
-                            }
+                    ForEach(Array(workoutSets.enumerated()), id: \.element.id) { index, set in
+                        VStack(alignment: .leading) {
+                            Text("Set \(index + 1)")
+                                .font(.subheadline)
+                                .fontWeight(.bold)
                             
                             HStack {
-                                Text("Reps:")
-                                    .font(.headline)
-                                Text("\(exercise.reps)")
+                                VStack(alignment: .leading) {
+                                    Text("Weight")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Text("\(set.weight, specifier: "%.1f") kg")
+                                        .font(.body)
+                                }
+                                
+                                Spacer()
+                                
+                                VStack(alignment: .leading) {
+                                    Text("Reps")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Text("\(set.reps)")
+                                        .font(.body)
+                                }
+                                
+                                Spacer()
+                                
+                                VStack(alignment: .leading) {
+                                    Text("Tempo")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Text(set.tempo.rawValue)
+                                        .font(.body)
+                                }
                             }
                             
-                            if exercise.weight > 0 {
+                            if index < workoutSets.count - 1 {
                                 HStack {
-                                    Text("Weight:")
-                                        .font(.headline)
-                                    Text("\(exercise.weight, specifier: "%.1f") kg")
+                                    Text("Rest: \(set.restTimeSeconds) seconds")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Spacer()
                                 }
                             }
                         }
@@ -739,25 +736,56 @@ struct WorkoutDetailView: View {
                         .background(Color(.systemGray6))
                         .cornerRadius(8)
                     }
-                    
-                    // Notes
-                    if let notes = exercise.notes, !notes.isEmpty {
-                        Text("Notes")
-                            .font(.headline)
-                            .padding(.top, 8)
+                } else {
+                    // Basic exercise info without detailed sets
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Sets:")
+                                .font(.headline)
+                            Text("\(exercise.sets)")
+                        }
                         
-                        Text(notes)
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .cornerRadius(8)
+                        HStack {
+                            Text("Reps:")
+                                .font(.headline)
+                            Text("\(exercise.reps)")
+                        }
+                        
+                        if exercise.weight > 0 {
+                            HStack {
+                                Text("Weight:")
+                                    .font(.headline)
+                                Text("\(exercise.weight, specifier: "%.1f") kg")
+                            }
+                        }
                     }
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
                 }
-                .padding()
+                
+                // Notes
+                if let notes = exercise.notes, !notes.isEmpty {
+                    Text("Notes")
+                        .font(.headline)
+                        .padding(.top, 8)
+                    
+                    Text(notes)
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
+                }
             }
-            .navigationTitle("Workout Details")
-            .navigationBarItems(trailing: Button("Close") {
-                presentationMode.wrappedValue.dismiss()
-            })
+            .padding()
+        }
+        .navigationTitle("Workout Details")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Done") {
+                    dismiss()
+                }
+            }
         }
     }
 }

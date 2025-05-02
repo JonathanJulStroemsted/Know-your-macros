@@ -23,10 +23,7 @@ struct CalorieCalculator {
             return tdee - 300
         }
     }
-    // Nicolaimanscher@gmail.com
-    // DBU1234
-    
-    
+
     
     enum ActivityLevel: CaseIterable {
         case sedentary, lightlyActive, moderatelyActive, veryActive, superActive

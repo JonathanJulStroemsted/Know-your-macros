@@ -5,109 +5,135 @@ struct CalendarView: View {
     @ObservedObject var dailyTracker: DailyTracker
     let profile: Profile
     
+    @State private var displayDate = Date()
     @State private var selectedDate = Date()
     @State private var showingEntry = false
+    @State private var showingNewEntry = false
     
     let calendar = Calendar.current
     
     var body: some View {
-        VStack {
-            // Month and year header
-            HStack {
-                Button(action: {
-                    if let newDate = calendar.date(byAdding: .month, value: -1, to: selectedDate) {
-                        selectedDate = newDate
-                    }
-                }) {
-                    Image(systemName: "chevron.left")
-                        .font(.title3)
-                        .foregroundColor(.blue)
-                }
-                
-                Spacer()
-                
-                Text(monthYearFormatter.string(from: selectedDate))
-                    .font(.title2)
-                    .fontWeight(.bold)
-                
-                Spacer()
-                
-                Button(action: {
-                    if let newDate = calendar.date(byAdding: .month, value: 1, to: selectedDate) {
-                        selectedDate = newDate
-                    }
-                }) {
-                    Image(systemName: "chevron.right")
-                        .font(.title3)
-                        .foregroundColor(.blue)
-                }
-            }
-            .padding(.horizontal)
-            .padding(.top, 20)
-            
-            // Day of week headers
-            HStack {
-                ForEach(daysOfWeek, id: \.self) { day in
-                    Text(day)
-                        .font(.caption)
+        ZStack {
+            // Calendar UI
+            VStack {
+                // Month and year header
+                HStack {
+                    Spacer()
+                    
+                    Text(monthYearFormatter.string(from: displayDate))
+                        .font(.title2)
                         .fontWeight(.bold)
-                        .frame(maxWidth: .infinity)
+                    
+                    Spacer()
                 }
-            }
-            .padding(.vertical, 8)
-            
-            // Calendar grid
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 10) {
-                ForEach(daysInMonth(), id: \.self) { date in
-                    if let date = date {
-                        let hasEntry = dailyTracker.hasEntryFor(profileId: profile.id, date: date)
-                        Button(action: {
-                            selectedDate = date
-                            showingEntry = true
-                        }) {
-                            Text(dayFormatter.string(from: date))
-                                .fontWeight(hasEntry ? .bold : .regular)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .aspectRatio(1, contentMode: .fill)
-                                .background(
-                                    Circle()
-                                        .fill(hasEntry ? Color.blue.opacity(0.3) : Color.clear)
-                                )
-                                .overlay(
-                                    Circle()
-                                        .stroke(
-                                            calendar.isDateInToday(date) ? Color.blue : Color.clear,
-                                            lineWidth: 2
-                                        )
-                                )
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    } else {
-                        Text("")
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal)
+                .padding(.top, 20)
+                
+                // Day of week headers
+                HStack {
+                    ForEach(daysOfWeek, id: \.self) { day in
+                        Text(day)
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .frame(maxWidth: .infinity)
                     }
                 }
-            }
-            .padding(.horizontal)
-            
-            Spacer()
-            
-            // Summary for selected month
-            CalendarSummaryView(dailyTracker: dailyTracker, profile: profile, month: selectedDate)
-                .padding()
-        }
-        .navigationTitle("History")
-        .sheet(isPresented: $showingEntry) {
-            NavigationView {
-                DailyTrackingView(profile: profile, profileManager: profileManager, dailyTracker: dailyTracker, date: selectedDate)
-                    .navigationTitle(dateFormatter.string(from: selectedDate))
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") {
-                                showingEntry = false
+                .padding(.vertical, 8)
+                
+                // Calendar grid with drag gesture
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 10) {
+                    ForEach(Array(daysInMonth().enumerated()), id: \.offset) { index, date in
+                        if let date = date {
+                            let hasEntry = dailyTracker.hasEntryFor(profileId: profile.id, date: date)
+                            Button(action: {
+                                selectedDate = date
+                                showingEntry = true
+                            }) {
+                                Text(dayFormatter.string(from: date))
+                                    .fontWeight(hasEntry ? .bold : .regular)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .aspectRatio(1, contentMode: .fill)
+                                    .background(
+                                        Circle()
+                                            .fill(hasEntry ? Color.blue.opacity(0.3) : Color.clear)
+                                    )
+                                    .overlay(
+                                        Circle()
+                                            .stroke(
+                                                calendar.isDateInToday(date) ? Color.blue : Color.clear,
+                                                lineWidth: 2
+                                            )
+                                    )
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        } else {
+                            Text("")
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+                .gesture(
+                    DragGesture()
+                        .onEnded { value in
+                            let threshold: CGFloat = 50
+                            if value.translation.width > threshold {
+                                withAnimation {
+                                    changeMonth(by: -1)
+                                }
+                            } else if value.translation.width < -threshold {
+                                withAnimation {
+                                    changeMonth(by: 1)
+                                }
                             }
                         }
-                    }
+                )
+                
+                Spacer()
+                
+                // Summary for selected month
+                CalendarSummaryView(dailyTracker: dailyTracker, profile: profile, month: displayDate)
+                    .padding()
+            }
+            
+            // Hidden navigation link
+            NavigationLink(
+                destination: DailyTrackingView(
+                    profile: profile,
+                    profileManager: profileManager,
+                    dailyTracker: dailyTracker,
+                    date: selectedDate
+                )
+                .navigationTitle(dateFormatter.string(from: selectedDate)),
+                isActive: $showingEntry
+            ) {
+                EmptyView()
+            }
+            .hidden()
+            
+            // Navigation link for new entry
+            NavigationLink(
+                destination: DailyTrackingView(
+                    profile: profile,
+                    profileManager: profileManager,
+                    dailyTracker: dailyTracker
+                )
+                .navigationTitle("Today"),
+                isActive: $showingNewEntry
+            ) {
+                EmptyView()
+            }
+            .hidden()
+        }
+        .navigationTitle("Calendar")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    showingNewEntry = true
+                }) {
+                    Image(systemName: "plus")
+                }
             }
         }
     }
@@ -116,8 +142,8 @@ struct CalendarView: View {
     private func daysInMonth() -> [Date?] {
         var days = [Date?]()
         
-        let range = calendar.range(of: .day, in: .month, for: selectedDate)!
-        let firstDay = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedDate))!
+        let range = calendar.range(of: .day, in: .month, for: displayDate)!
+        let firstDay = calendar.date(from: calendar.dateComponents([.year, .month], from: displayDate))!
         
         // Add empty days for start of month
         let weekday = calendar.component(.weekday, from: firstDay)
@@ -136,6 +162,13 @@ struct CalendarView: View {
         days.append(contentsOf: Array(repeating: nil, count: remainingDays))
         
         return days
+    }
+    
+    private func changeMonth(by value: Int) {
+        if let newDate = calendar.date(byAdding: .month, value: value, to: displayDate) {
+            print("🔄 displayDate was \(displayDate), now \(newDate)")
+            displayDate = newDate
+        }
     }
     
     private var daysOfWeek: [String] {

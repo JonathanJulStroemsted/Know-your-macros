@@ -55,19 +55,25 @@ struct MainView: View {
                     }
                 }
             }
-            .navigationTitle("Know Your Macros")
+            .navigationTitle("Profiles")
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
                         showingAddProfile = true
-                    } label: {
+                    }) {
                         Image(systemName: "plus")
                     }
                 }
             }
-            .sheet(isPresented: $showingAddProfile) {
-                ProfileEditorView(profileManager: profileManager)
-            }
+            .overlay(
+                NavigationLink(
+                    destination: ProfileEditorView(profileManager: profileManager),
+                    isActive: $showingAddProfile
+                ) {
+                    EmptyView()
+                }
+                .hidden()
+            )
         }
     }
 } 

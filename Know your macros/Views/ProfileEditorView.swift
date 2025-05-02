@@ -36,114 +36,56 @@ struct ProfileEditorView: View {
     }
     
     var body: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("Profile Information")) {
-                    TextField("Name", text: $name)
+        Form {
+            Section(header: Text("Profile Information")) {
+                TextField("Name", text: $name)
+            }
+            
+            Section(header: Text("Physical Details")) {
+                Stepper("Weight: \(Int(weight)) kg", value: $weight, in: 30...200)
+                Stepper("Height: \(Int(height)) cm", value: $height, in: 120...220)
+                Stepper("Age: \(age) years", value: $age, in: 10...100)
+                Picker("Gender", selection: $isMale) {
+                    Text("Male").tag(true)
+                    Text("Female").tag(false)
                 }
-                
-                Section(header: Text("Physical Details")) {
-                    Stepper("Weight: \(Int(weight)) kg", value: $weight, in: 30...200)
-                    Stepper("Height: \(Int(height)) cm", value: $height, in: 120...220)
-                    Stepper("Age: \(age) years", value: $age, in: 10...100)
-                    Picker("Gender", selection: $isMale) {
-                        Text("Male").tag(true)
-                        Text("Female").tag(false)
+                .pickerStyle(SegmentedPickerStyle())
+            }
+            
+            Section(header: Text("Goal")) {
+                Picker("Goal", selection: $goalIndex) {
+                    ForEach(0..<CalorieCalculator.Goal.allCases.count, id: \.self) { index in
+                        Text(CalorieCalculator.Goal.allCases[index].displayName)
                     }
-                    .pickerStyle(SegmentedPickerStyle())
                 }
-                
-                Section(header: Text("Goal")) {
-                    Picker("Goal", selection: $goalIndex) {
-                        ForEach(0..<CalorieCalculator.Goal.allCases.count, id: \.self) { index in
-                            Text(CalorieCalculator.Goal.allCases[index].displayName)
-                        }
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
-                }
-                
-                Section(header: Text("Activity Level")) {
-                    Button(action: {
-                        showingActivityLevelPicker = true
-                    }) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(activityLevel.displayName.components(separatedBy: " (")[0])
-                                    .font(.headline)
-                                
-                                if let description = activityLevel.displayName.components(separatedBy: " (").dropFirst().first?.dropLast() {
-                                    Text(String(description))
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
+                .pickerStyle(SegmentedPickerStyle())
+            }
+            
+            Section(header: Text("Activity Level")) {
+                NavigationLink(destination: ActivityLevelPickerView(activityLevelIndex: $activityLevelIndex)) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(activityLevel.displayName.components(separatedBy: " (")[0])
+                                .font(.headline)
                             
-                            Spacer()
-                            
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .sheet(isPresented: $showingActivityLevelPicker) {
-                        NavigationView {
-                            List {
-                                ForEach(0..<CalorieCalculator.ActivityLevel.allCases.count, id: \.self) { index in
-                                    let activityLevel = CalorieCalculator.ActivityLevel.allCases[index]
-                                    Button(action: {
-                                        activityLevelIndex = index
-                                        showingActivityLevelPicker = false
-                                    }) {
-                                        HStack {
-                                            VStack(alignment: .leading, spacing: 6) {
-                                                Text(activityLevel.displayName.components(separatedBy: " (")[0])
-                                                    .font(.headline)
-                                                
-                                                if let description = activityLevel.displayName.components(separatedBy: " (").dropFirst().first?.dropLast() {
-                                                    Text(String(description))
-                                                        .font(.caption)
-                                                        .foregroundColor(.secondary)
-                                                }
-                                            }
-                                            
-                                            Spacer()
-                                            
-                                            if index == activityLevelIndex {
-                                                Image(systemName: "checkmark")
-                                                    .foregroundColor(.blue)
-                                            }
-                                        }
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
-                                }
-                            }
-                            .navigationTitle("Select Activity Level")
-                            .toolbar {
-                                ToolbarItem(placement: .cancellationAction) {
-                                    Button("Cancel") {
-                                        showingActivityLevelPicker = false
-                                    }
-                                }
+                            if let description = activityLevel.displayName.components(separatedBy: " (").dropFirst().first?.dropLast() {
+                                Text(String(description))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
                             }
                         }
                     }
                 }
             }
-            .navigationTitle(editingProfile == nil ? "Add Profile" : "Edit Profile")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+        }
+        .navigationTitle(editingProfile == nil ? "Add Profile" : "Edit Profile")
+        .toolbar {     
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") {
+                    saveProfile()
+                    dismiss()
                 }
-                
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        saveProfile()
-                        dismiss()
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
     }
@@ -171,4 +113,50 @@ struct ProfileEditorView: View {
             profileManager.objectWillChange.send()
         }
     }
-} 
+}
+
+struct ActivityLevelPickerView: View {
+    @Binding var activityLevelIndex: Int
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        List {
+            ForEach(0..<CalorieCalculator.ActivityLevel.allCases.count, id: \.self) { index in
+                let activityLevel = CalorieCalculator.ActivityLevel.allCases[index]
+                Button(action: {
+                    activityLevelIndex = index
+                    dismiss()
+                }) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(activityLevel.displayName.components(separatedBy: " (")[0])
+                                .font(.headline)
+                            
+                            if let description = activityLevel.displayName.components(separatedBy: " (").dropFirst().first?.dropLast() {
+                                Text(String(description))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        if index == activityLevelIndex {
+                            Image(systemName: "checkmark")
+                                .foregroundColor(.blue)
+                        }
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+        .navigationTitle("Select Activity Level")
+    }
+}
+
+struct ProfileEditorView_Previews: PreviewProvider {
+    static var previews: some View {
+        ProfileEditorView(profileManager: ProfileManager())
+    }
+}
+

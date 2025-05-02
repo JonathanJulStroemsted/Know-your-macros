@@ -9,39 +9,45 @@ struct ExerciseSelectionView: View {
     
     @Environment(\.presentationMode) var presentationMode
     @State private var selectedExercise: Exercise?
-    @State private var showingUserExercises = false
     @State private var showingSaveConfirmation = false
     @State private var navigateToExerciseDetail = false
     
     var body: some View {
-        NavigationView {
-            VStack {
-                searchBar
-                
-                exerciseContent
-                
-                selectedExercisesButton
-            }
-            .navigationTitle("Select Exercises")
-            .onAppear(perform: loadExercises)
-            .background(exerciseDetailNavLink)
-            .sheet(isPresented: $showingUserExercises) {
+        VStack {
+            searchBar
+            
+            exerciseContent
+            
+            NavigationLink {
                 UserExercisesView(viewModel: viewModel, dailyTracker: dailyTracker, profile: profile, date: date)
-            }
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Cancel") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
+                    .environmentObject(profileManager)
+            } label: {
+                HStack {
+                    Image(systemName: "list.bullet")
+                    Text("View Selected Exercises (\(viewModel.selectedExercises.count))")
                 }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.mint)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+                .padding(.horizontal)
             }
-            .alert("Exercise Saved", isPresented: $showingSaveConfirmation) {
-                Button("OK", role: .cancel) {
-                    presentationMode.wrappedValue.dismiss()
-                }
-            } message: {
-                Text("Your exercise has been saved. Remember to click 'Save Exercises' on the main screen to update your daily record.")
+            .disabled(viewModel.selectedExercises.isEmpty)
+            .padding(.bottom)
+        }
+        .navigationTitle("Select Exercises")
+        .onAppear(perform: loadExercises)
+        .background(exerciseDetailNavLink)
+        .toolbar {
+            
+        }
+        .alert("Exercise Saved", isPresented: $showingSaveConfirmation) {
+            Button("OK", role: .cancel) {
+                presentationMode.wrappedValue.dismiss()
             }
+        } message: {
+            Text("Your exercise has been saved. Remember to click 'Save Exercises' on the main screen to update your daily record.")
         }
     }
     
@@ -132,26 +138,6 @@ struct ExerciseSelectionView: View {
             date: date,
             profile: profile
         )
-    }
-    
-    // Button to view selected exercises
-    private var selectedExercisesButton: some View {
-        Button(action: {
-            showingUserExercises = true
-        }) {
-            HStack {
-                Image(systemName: "list.bullet")
-                Text("View Selected Exercises (\(viewModel.selectedExercises.count))")
-            }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(Color.mint)
-            .foregroundColor(.white)
-            .cornerRadius(10)
-            .padding(.horizontal)
-        }
-        .disabled(viewModel.selectedExercises.isEmpty)
-        .padding(.bottom)
     }
     
     // Navigation link for exercise detail
@@ -418,16 +404,40 @@ struct ExerciseDetailView: View {
     }
     
     private func calculateSetCalories(set: WorkoutSet, metValue: Double, weight: Double) -> Int {
-        var setDuration = Double(set.reps) * 0.05
+        // Calculate work phase calories
+        var setDuration = Double(set.reps) * 0.05 // Base: 3 seconds per rep
+        
+        // Adjust for tempo
         switch set.tempo {
-        case .slow: setDuration *= 1.5
-        case .normal: setDuration *= 1.0
-        case .fast: setDuration *= 0.8
-        case .stopAndGo: setDuration *= 1.3
+        case .slow:
+            setDuration *= 1.5
+        case .normal:
+            setDuration *= 1.0
+        case .fast:
+            setDuration *= 0.8
+        case .stopAndGo:
+            setDuration *= 1.3
         }
-        let durationInHours = setDuration / 60.0
-        let setCalories = metValue * weight * durationInHours
-        return Int(setCalories)
+        
+        // Convert to hours for MET formula
+        let workDurationInHours = setDuration / 60.0
+        
+        // Work phase calories (using higher MET for active lifting)
+        let workCalories = metValue * weight * workDurationInHours
+        
+        // Calculate mechanical work calories
+        let weightLifted = set.weight
+        let reps = set.reps
+        let distancePerRep = 0.6 // meters (typical squat depth)
+        let mechanicalWork = weightLifted * 9.81 * distancePerRep * Double(reps) // Joules
+        let mechanicalCalories = (mechanicalWork / 4184.0) / 0.25 // Convert to calories and account for 25% efficiency
+        
+        // Rest phase calories (using lower MET for rest)
+        let restDurationInHours = Double(set.restTimeSeconds) / 3600.0 // Use actual rest time from the set
+        let restCalories = 1.3 * weight * restDurationInHours // 1.3 MET for rest
+        
+        // Add work, mechanical, and rest calories
+        return Int(workCalories + mechanicalCalories + restCalories)
     }
     
     private func calculateTotalCalories(for profile: Profile) -> Int {
@@ -629,32 +639,42 @@ struct UserExercisesView: View {
                 } else {
                     List {
                         ForEach(Array(viewModel.selectedExercises.enumerated()), id: \.element.id) { index, userExercise in
-                            VStack(alignment: .leading) {
-                                Text(userExercise.exercise.name)
-                                    .font(.headline)
-                                
-                                HStack {
-                                    Text("\(userExercise.sets) sets")
-                                    Text("•")
-                                    Text("\(userExercise.reps) reps")
-                                    if userExercise.weight > 0 {
+                            NavigationLink {
+                                EditUserExerciseView(
+                                    userExercise: userExercise,
+                                    onSave: { updated in
+                                        var exercise = viewModel.selectedExercises[index]
+                                        exercise.sets = updated.sets
+                                        exercise.reps = updated.reps
+                                        exercise.weight = updated.weight
+                                        exercise.notes = updated.notes
+                                        viewModel.selectedExercises[index] = exercise
+                                    }
+                                )
+                            } label: {
+                                VStack(alignment: .leading) {
+                                    Text(userExercise.exercise.name)
+                                        .font(.headline)
+                                    
+                                    HStack {
+                                        Text("\(userExercise.sets) sets")
                                         Text("•")
-                                        Text("\(Int(userExercise.weight)) kg")
+                                        Text("\(userExercise.reps) reps")
+                                        if userExercise.weight > 0 {
+                                            Text("•")
+                                            Text("\(Int(userExercise.weight)) kg")
+                                        }
+                                    }
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                                    
+                                    if let notes = userExercise.notes, !notes.isEmpty {
+                                        Text(notes)
+                                            .font(.caption)
+                                            .foregroundColor(.gray)
+                                            .padding(.top, 4)
                                     }
                                 }
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                                
-                                if let notes = userExercise.notes, !notes.isEmpty {
-                                    Text(notes)
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                        .padding(.top, 4)
-                                }
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                editingExerciseIndex = index
                             }
                         }
                         .onDelete { indexSet in
@@ -689,19 +709,6 @@ struct UserExercisesView: View {
                         presentationMode.wrappedValue.dismiss()
                     }
                 }
-            }
-            .sheet(item: $editingExerciseIndex) { index in
-                EditUserExerciseView(
-                    userExercise: viewModel.selectedExercises[index],
-                    onSave: { updated in
-                        var exercise = viewModel.selectedExercises[index]
-                        exercise.sets = updated.sets
-                        exercise.reps = updated.reps
-                        exercise.weight = updated.weight
-                        exercise.notes = updated.notes
-                        viewModel.selectedExercises[index] = exercise
-                    }
-                )
             }
             .alert("Workout Data Saved", isPresented: $showingSaveConfirmation) {
                 Button("OK", role: .cancel) { 
@@ -791,10 +798,11 @@ struct UserExercisesView: View {
     
     // Calculate calories for workout sets
     private func calculateCaloriesForSets(_ sets: [WorkoutSet], metValue: Double) -> Int {
-        var setCalories = 0
+        var totalCalories = 0
+        let weight = Double(profile.weight)
         
-        for set in sets {
-            // Each set duration in minutes (estimate based on reps and tempo)
+        for (index, set) in sets.enumerated() {
+            // Calculate work phase calories
             var setDuration = Double(set.reps) * 0.05 // Base: 3 seconds per rep
             
             // Adjust for tempo
@@ -810,16 +818,31 @@ struct UserExercisesView: View {
             }
             
             // Convert to hours for MET formula
-            let durationInHours = setDuration / 60.0
+            let workDurationInHours = setDuration / 60.0
             
-            // Use profile weight or default if not available
-            let weight = Double(profile.weight)
+            // Work phase calories (using higher MET for active lifting)
+            let workCalories = metValue * weight * workDurationInHours
             
-            // MET formula: Calories = MET × weight(kg) × duration(hrs)
-            setCalories += Int(metValue * weight * durationInHours)
+            // Calculate mechanical work calories
+            let weightLifted = set.weight
+            let reps = set.reps
+            let distancePerRep = 0.6 // meters (typical squat depth)
+            let mechanicalWork = weightLifted * 9.81 * distancePerRep * Double(reps) // Joules
+            let mechanicalCalories = (mechanicalWork / 4184.0) / 0.25 // Convert to calories and account for 25% efficiency
+            
+            // Rest phase calories (using lower MET for rest)
+            // Only count rest if it's not the last set
+            var restCalories = 0.0
+            if index < sets.count - 1 {
+                let restDurationInHours = Double(set.restTimeSeconds) / 3600.0
+                restCalories = 1.3 * weight * restDurationInHours // 1.3 MET for rest
+            }
+            
+            // Add work, mechanical, and rest calories
+            totalCalories += Int(workCalories + mechanicalCalories + restCalories)
         }
         
-        return setCalories
+        return totalCalories
     }
     
     // Calculate estimated calories for basic exercises
@@ -831,7 +854,6 @@ struct UserExercisesView: View {
     }
 }
 
-// Helper to make Int conform to Identifiable for sheet presentation
 extension Int: Identifiable {
     public var id: Int { self }
 }
@@ -929,18 +951,19 @@ struct CategoryBoxView: View {
     @EnvironmentObject var profileManager: ProfileManager
     @Environment(\.presentationMode) var presentationMode
     
-    @State private var showingExercises = false
-
     var body: some View {
-        categoryButton
-            .sheet(isPresented: $showingExercises) {
-                exerciseListView
+        NavigationLink {
+            List(exercises) { exercise in
+                NavigationLink {
+                    ExerciseDetailView(exercise: exercise, viewModel: viewModel, date: date, profile: profile)
+                        .environmentObject(dailyTracker)
+                        .environmentObject(profileManager)
+                } label: {
+                    ExerciseRow(exercise: exercise, isSelected: viewModel.isExerciseSelected(exercise))
+                }
             }
-    }
-    
-    // Extract the category button to a separate view
-    private var categoryButton: some View {
-        VStack {
+            .navigationTitle(categoryName)
+        } label: {
             Text(categoryName)
                 .font(.headline)
                 .padding()
@@ -949,38 +972,7 @@ struct CategoryBoxView: View {
                 .background(Color.mint)
                 .foregroundColor(.white)
                 .cornerRadius(10)
-                .onTapGesture {
-                    showingExercises = true
-                }
         }
-    }
-    
-    // Extract the exercise list to a separate view
-    private var exerciseListView: some View {
-        NavigationView {
-            List(exercises) { exercise in
-                NavigationLink {
-                    createExerciseDetailView(for: exercise)
-                } label: {
-                    ExerciseRow(exercise: exercise, isSelected: viewModel.isExerciseSelected(exercise))
-                }
-            }
-            .navigationTitle(categoryName)
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Close") {
-                        showingExercises = false
-                    }
-                }
-            }
-        }
-    }
-    
-    // Helper method to create the exercise detail view
-    private func createExerciseDetailView(for exercise: Exercise) -> some View {
-        ExerciseDetailView(exercise: exercise, viewModel: viewModel, date: date, profile: profile)
-            .environmentObject(dailyTracker)
-            .environmentObject(profileManager)
     }
 }
 

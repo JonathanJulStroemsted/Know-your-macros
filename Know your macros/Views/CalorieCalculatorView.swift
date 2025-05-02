@@ -114,17 +114,19 @@ struct CalorieCalculatorView: View {
             }
             
             Section(header: Text("Edit Profile")) {
-                Button(action: {
-                    showingEditProfile = true
-                }) {
+                NavigationLink {
+                    ProfileEditorView(profileManager: profileManager, profile: profile)
+                        .onDisappear {
+                            refreshProfileData()
+                        }
+                } label: {
                     HStack {
                         Image(systemName: "person.crop.circle.badge.checkmark")
                             .font(.title2)
                             .foregroundColor(.blue)
                         Text("Edit Profile Details")
                         Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
+                        // Image(systemName: "chevron.right")
                     }
                 }
             }
@@ -162,11 +164,17 @@ struct CalorieCalculatorView: View {
             }
         }
         .navigationTitle("Calorie Calculator")
-        .sheet(isPresented: $showingEditProfile) {
-            ProfileEditorView(profileManager: profileManager, profile: profile)
-                .onDisappear {
-                    refreshProfileData()
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                NavigationLink {
+                    ProfileEditorView(profileManager: profileManager, profile: profile)
+                        .onDisappear {
+                            refreshProfileData()
+                        }
+                } label: {
+                    Image(systemName: "person.circle")
                 }
+            }
         }
         .onAppear {
             refreshProfileData()
