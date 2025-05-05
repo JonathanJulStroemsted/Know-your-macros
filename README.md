@@ -1,3 +1,22 @@
+This is my first real app for mobile for training.
+
+It can currently make a profile. You add your weight, height, age and gender.
+Also declare what you want to do with you weight. Gain, lose or maintain.
+It will give you the calories you need
+
+You can type in the calories you eat.
+
+You can connect your apple health app and get the steps in there to see how much you burn and how much you then can eat to still be in a deficit.
+
+You can add the exercises you do in the gym.
+
+Currently they are hardcoded with 20 for each bodypart.
+
+And the calories burned doing that exercise is added to the total calories to keep track of everything.
+
+It works best on a Physical IOS Device cause of the connection to apple health app.
+
+
 📱 Running on a Physical iOS Device
 
 Connect Your Device
@@ -31,6 +50,9 @@ On the device, go to Settings > General > Device Management (or Profiles & Devic
 Launch the App
 
 The app icon will appear on your device’s home screen. Tap it to launch.
+
+
+
 
 And enjoy the Muscles nun :)
 
